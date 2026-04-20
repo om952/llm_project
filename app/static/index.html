@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LLM DSA Reasoning Engine</title>
+  <style>
+    :root {
+      --bg: #f7f8fb;
+      --panel: #ffffff;
+      --text: #122035;
+      --muted: #5b6577;
+      --primary: #125ad9;
+      --border: #dde3ef;
+      --danger: #b42318;
+      --ok: #067647;
+      --active: #ffd166;
+      --visited: #d6f6e5;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "SF Pro Text", "Segoe UI", "Helvetica Neue", sans-serif;
+      background: radial-gradient(circle at 20% -10%, #dce8ff 0%, var(--bg) 40%);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    .shell {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 20px;
+      display: grid;
+      gap: 16px;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      box-shadow: 0 6px 18px rgba(15, 36, 80, 0.06);
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 1.5rem;
+      letter-spacing: 0.2px;
+    }
+
+    h3 {
+      margin-top: 0;
+    }
+
+    .subtitle {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 98px;
+      resize: vertical;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 0.95rem;
+      font-family: inherit;
+      margin-bottom: 10px;
+    }
+
+    button,
+    select {
+      border: 1px solid var(--primary);
+      border-radius: 10px;
+      padding: 8px 12px;
+      font-size: 0.92rem;
+    }
+
+    button {
+      background: var(--primary);
+      color: #fff;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    button.secondary {
+      background: #fff;
+      color: var(--primary);
+    }
+
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .status {
+      font-size: 0.92rem;
+      margin-top: 8px;
+      color: var(--muted);
+    }
+
+    .status.ok {
+      color: var(--ok);
+    }
+
+    .status.error {
+      color: var(--danger);
+    }
+
+    .split {
+      display: grid;
+      gap: 16px;
+      grid-template-columns: 1fr;
+    }
+
+    @media (min-width: 960px) {
+      .split {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    .step-meta {
+      margin: 4px 0 8px;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .meta-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 6px;
+      margin-bottom: 8px;
+      font-size: 0.9rem;
+      color: var(--muted);
+    }
+
+    pre {
+      margin: 0;
+      background: #0b1324;
+      color: #d5e4ff;
+      border-radius: 10px;
+      padding: 12px;
+      max-height: 320px;
+      overflow: auto;
+      font-size: 0.82rem;
+    }
+
+    .bars {
+      display: flex;
+      align-items: flex-end;
+      gap: 8px;
+      min-height: 180px;
+      padding: 8px;
+      border: 1px dashed var(--border);
+      border-radius: 10px;
+      background: #fbfdff;
+    }
+
+    .bar-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-width: 48px;
+      flex: 1;
+    }
+
+    .bar {
+      width: 100%;
+      border-radius: 8px 8px 4px 4px;
+      background: #8db5ff;
+      border: 1px solid #709de8;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      color: #06204f;
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding-bottom: 4px;
+    }
+
+    .bar.active {
+      background: var(--active);
+      border-color: #d6a500;
+    }
+
+    .bar-index {
+      margin-top: 6px;
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+
+    .graph-wrap {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px;
+      background: #fafdff;
+    }
+
+    .graph-board {
+      position: relative;
+      width: 100%;
+      min-height: 280px;
+      border: 1px dashed var(--border);
+      border-radius: 10px;
+      background: #ffffff;
+      overflow: hidden;
+      margin-bottom: 10px;
+    }
+
+    .graph-svg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+
+    .graph-edge {
+      stroke: #94a3c4;
+      stroke-width: 2;
+    }
+
+    .graph-node {
+      position: absolute;
+      width: 44px;
+      height: 44px;
+      margin-left: -22px;
+      margin-top: -22px;
+      border-radius: 50%;
+      border: 2px solid #4a6eb5;
+      background: #e6efff;
+      color: #163263;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .graph-node.visited {
+      background: var(--visited);
+      border-color: #44a875;
+      color: #0e4f2c;
+    }
+
+    .graph-node.active {
+      background: var(--active);
+      border-color: #d19700;
+      color: #4a3200;
+      transform: scale(1.05);
+    }
+
+    .graph-edge-list {
+      margin: 0;
+      padding-left: 18px;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    ul {
+      margin: 8px 0;
+      padding-left: 18px;
+    }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      max-width: 100%;
+      overflow-x: auto;
+      display: block;
+    }
+
+    td,
+    th {
+      border: 1px solid var(--border);
+      padding: 8px;
+      min-width: 40px;
+      text-align: center;
+      font-size: 0.9rem;
+    }
+
+    td.active {
+      background: #fff2c7;
+      border-color: #e4b000;
+      font-weight: 700;
+    }
+
+    .muted {
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .hidden {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <section class="card">
+      <h1>LLM DSA Reasoning Engine</h1>
+      <p class="subtitle">Submit a DSA prompt and inspect explanation, animated steps, and visualization output.</p>
+    </section>
+
+    <section class="card">
+      <textarea id="problemInput" placeholder="Example: Perform BFS on graph: A-B, A-C, B-D starting from A">Perform BFS on graph: A-B, A-C, B-D starting from A</textarea>
+      <div class="row">
+        <button id="submitBtn">Solve</button>
+        <button id="sampleBtn" class="secondary">Load Sample Evaluation</button>
+      </div>
+      <div id="status" class="status">Ready.</div>
+    </section>
+
+    <section id="outputPanel" class="split hidden">
+      <div class="card">
+        <h3>Explanation</h3>
+        <p id="explanationText" class="muted"></p>
+
+        <h3>Step Viewer</h3>
+        <div class="row" style="margin-bottom: 8px;">
+          <button id="prevBtn" class="secondary">Previous</button>
+          <button id="playBtn" class="secondary">Play</button>
+          <button id="pauseBtn" class="secondary">Pause</button>
+          <button id="nextBtn" class="secondary">Next</button>
+          <label for="speedSelect" class="muted">Speed</label>
+          <select id="speedSelect">
+            <option value="slow">Slow</option>
+            <option value="medium" selected>Medium</option>
+            <option value="fast">Fast</option>
+          </select>
+        </div>
+        <div id="stepMeta" class="step-meta"></div>
+        <div id="stepDescription" class="muted" style="margin-bottom: 8px;"></div>
+        <div class="meta-grid">
+          <div><strong>Queue:</strong> <span id="queueInfo">N/A</span></div>
+          <div><strong>Visited:</strong> <span id="visitedInfo">N/A</span></div>
+        </div>
+        <pre id="stepState"></pre>
+      </div>
+
+      <div class="card">
+        <h3>Visualization</h3>
+        <div id="vizContainer"></div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const problemInput = document.getElementById("problemInput");
+    const submitBtn = document.getElementById("submitBtn");
+    const sampleBtn = document.getElementById("sampleBtn");
+    const statusEl = document.getElementById("status");
+    const outputPanel = document.getElementById("outputPanel");
+    const explanationText = document.getElementById("explanationText");
+    const prevBtn = document.getElementById("prevBtn");
+    const playBtn = document.getElementById("playBtn");
+    const pauseBtn = document.getElementById("pauseBtn");
+    const nextBtn = document.getElementById("nextBtn");
+    const speedSelect = document.getElementById("speedSelect");
+    const stepMeta = document.getElementById("stepMeta");
+    const stepDescription = document.getElementById("stepDescription");
+    const stepState = document.getElementById("stepState");
+    const queueInfo = document.getElementById("queueInfo");
+    const visitedInfo = document.getElementById("visitedInfo");
+    const vizContainer = document.getElementById("vizContainer");
+
+    const SPEED_TO_MS = {
+      slow: 1400,
+      medium: 800,
+      fast: 360,
+    };
+
+    let currentResponse = null;
+    let currentStepIndex = 0;
+    let playbackTimer = null;
+
+    function setStatus(message, kind = "") {
+      statusEl.textContent = message;
+      statusEl.className = `status ${kind}`.trim();
+    }
+
+    function safeArray(value) {
+      return Array.isArray(value) ? value : [];
+    }
+
+    function stopPlayback() {
+      if (playbackTimer) {
+        clearInterval(playbackTimer);
+        playbackTimer = null;
+      }
+      updatePlaybackControls();
+    }
+
+    function updatePlaybackControls() {
+      const hasData = !!currentResponse && Array.isArray(currentResponse.steps) && currentResponse.steps.length > 0;
+      playBtn.disabled = !hasData || !!playbackTimer || currentStepIndex >= currentResponse.steps.length - 1;
+      pauseBtn.disabled = !playbackTimer;
+      prevBtn.disabled = !hasData || currentStepIndex === 0;
+      nextBtn.disabled = !hasData || currentStepIndex >= currentResponse.steps.length - 1;
+    }
+
+    function getCurrentStep() {
+      if (!currentResponse || !Array.isArray(currentResponse.steps) || currentResponse.steps.length === 0) {
+        return null;
+      }
+      return currentResponse.steps[currentStepIndex] || null;
+    }
+
+    function startPlayback() {
+      if (!currentResponse || !Array.isArray(currentResponse.steps) || currentResponse.steps.length === 0) {
+        return;
+      }
+
+      if (currentStepIndex >= currentResponse.steps.length - 1) {
+        return;
+      }
+
+      stopPlayback();
+      const speed = speedSelect.value;
+      const intervalMs = SPEED_TO_MS[speed] || SPEED_TO_MS.medium;
+
+      playbackTimer = setInterval(() => {
+        if (!currentResponse || !Array.isArray(currentResponse.steps)) {
+          stopPlayback();
+          return;
+        }
+
+        if (currentStepIndex >= currentResponse.steps.length - 1) {
+          stopPlayback();
+          return;
+        }
+
+        currentStepIndex += 1;
+        renderAll();
+      }, intervalMs);
+
+      updatePlaybackControls();
+    }
+
+    function renderStep() {
+      const step = getCurrentStep();
+      if (!step) {
+        stepMeta.textContent = "No steps available.";
+        stepDescription.textContent = "";
+        queueInfo.textContent = "N/A";
+        visitedInfo.textContent = "N/A";
+        stepState.textContent = "{}";
+        updatePlaybackControls();
+        return;
+      }
+
+      const totalSteps = currentResponse.steps.length;
+      stepMeta.textContent = `Step ${step.step} / ${totalSteps}`;
+      stepDescription.textContent = step.description || "";
+      stepState.textContent = JSON.stringify(step.state || {}, null, 2);
+
+      if (currentResponse.problem_type === "graph") {
+        const queue = safeArray(step.state && step.state.queue).join(", ");
+        const visited = safeArray(step.state && step.state.visited).join(", ");
+        queueInfo.textContent = queue || "(empty)";
+        visitedInfo.textContent = visited || "(none)";
+      } else {
+        queueInfo.textContent = "N/A";
+        visitedInfo.textContent = "N/A";
+      }
+
+      updatePlaybackControls();
+    }
+
+    function renderArray(step) {
+      const state = (step && step.state) || {};
+      const array = safeArray(state.array);
+      const highlight = new Set(safeArray(state.highlight));
+
+      if (array.length === 0) {
+        vizContainer.innerHTML = '<p class="muted">No array data available.</p>';
+        return;
+      }
+
+      const maxValue = Math.max(...array.map((v) => Math.abs(Number(v))), 1);
+      const bars = array.map((value, index) => {
+        const numeric = Number(value) || 0;
+        const ratio = Math.max(12, Math.round((Math.abs(numeric) / maxValue) * 160));
+        const activeClass = highlight.has(index) ? "active" : "";
+        return `
+          <div class="bar-wrap">
+            <div class="bar ${activeClass}" style="height:${ratio}px">${numeric}</div>
+            <div class="bar-index">${index}</div>
+          </div>
+        `;
+      }).join("");
+
+      vizContainer.innerHTML = `<div class="bars">${bars}</div>`;
+    }
+
+    function computeGraphPositions(nodes, width, height) {
+      const positions = {};
+      if (!nodes.length) {
+        return positions;
+      }
+      const centerX = width / 2;
+      const centerY = height / 2;
+      const radius = Math.max(60, Math.min(width, height) / 2 - 45);
+
+      nodes.forEach((node, index) => {
+        const angle = (2 * Math.PI * index) / nodes.length - Math.PI / 2;
+        positions[node] = {
+          x: centerX + radius * Math.cos(angle),
+          y: centerY + radius * Math.sin(angle),
+        };
+      });
+
+      return positions;
+    }
+
+    function renderGraph(step) {
+      const state = (step && step.state) || {};
+      const nodes = safeArray(state.nodes).map(String);
+      const edges = safeArray(state.edges);
+      const visited = new Set(safeArray(state.visited).map(String));
+      const active = state.active ? String(state.active) : "";
+
+      if (!nodes.length) {
+        vizContainer.innerHTML = '<p class="muted">No graph data available.</p>';
+        return;
+      }
+
+      const boardWidth = 430;
+      const boardHeight = 280;
+      const positions = computeGraphPositions(nodes, boardWidth, boardHeight);
+
+      const lines = edges.map((edge) => {
+        const pair = safeArray(edge);
+        if (pair.length < 2) {
+          return "";
+        }
+        const a = String(pair[0]);
+        const b = String(pair[1]);
+        const source = positions[a];
+        const target = positions[b];
+        if (!source || !target) {
+          return "";
+        }
+        return `<line class="graph-edge" x1="${source.x}" y1="${source.y}" x2="${target.x}" y2="${target.y}" />`;
+      }).join("");
+
+      const nodeMarkup = nodes.map((node) => {
+        const position = positions[node];
+        if (!position) {
+          return "";
+        }
+        const classes = ["graph-node"];
+        if (visited.has(node)) {
+          classes.push("visited");
+        }
+        if (node === active) {
+          classes.push("active");
+        }
+
+        return `<div class="${classes.join(" ")}" style="left:${position.x}px; top:${position.y}px;">${node}</div>`;
+      }).join("");
+
+      const edgeList = edges.map((edge) => {
+        const pair = safeArray(edge);
+        if (pair.length < 2) {
+          return "";
+        }
+        return `<li>${pair[0]} - ${pair[1]}</li>`;
+      }).join("");
+
+      vizContainer.innerHTML = `
+        <div class="graph-wrap">
+          <div class="graph-board">
+            <svg class="graph-svg" viewBox="0 0 ${boardWidth} ${boardHeight}" preserveAspectRatio="xMidYMid meet">
+              ${lines}
+            </svg>
+            ${nodeMarkup}
+          </div>
+          <p class="muted"><strong>Active node:</strong> ${active || "-"}</p>
+          <ul class="graph-edge-list">${edgeList || "<li>(no edges)</li>"}</ul>
+        </div>
+      `;
+    }
+
+    function buildTreeAdjacency(nodes, edges) {
+      const children = new Map();
+      const childNodes = new Set();
+      nodes.forEach((node) => children.set(node, []));
+
+      edges.forEach((edge) => {
+        const pair = safeArray(edge);
+        if (pair.length < 2) {
+          return;
+        }
+        const parent = pair[0];
+        const child = pair[1];
+        if (!children.has(parent)) {
+          children.set(parent, []);
+        }
+        children.get(parent).push(child);
+        childNodes.add(child);
+      });
+
+      let root = nodes.find((node) => !childNodes.has(node));
+      if (root === undefined) {
+        root = nodes[0];
+      }
+
+      return { children, root };
+    }
+
+    function renderTreeNode(node, childrenMap, current) {
+      const children = childrenMap.get(node) || [];
+      const isCurrent = Number(node) === Number(current);
+      const label = isCurrent ? `<strong>${node} (current)</strong>` : String(node);
+
+      if (children.length === 0) {
+        return `<li>${label}</li>`;
+      }
+
+      const nested = children.map((child) => renderTreeNode(child, childrenMap, current)).join("");
+      return `<li>${label}<ul>${nested}</ul></li>`;
+    }
+
+    function renderTree(step) {
+      const state = (step && step.state) || {};
+      const nodes = safeArray(state.nodes);
+      const edges = safeArray(state.edges);
+
+      if (!nodes.length) {
+        vizContainer.innerHTML = '<p class="muted">No tree data available.</p>';
+        return;
+      }
+
+      const graph = buildTreeAdjacency(nodes, edges);
+      const treeMarkup = `<ul>${renderTreeNode(graph.root, graph.children, state.current)}</ul>`;
+      vizContainer.innerHTML = treeMarkup;
+    }
+
+    function renderDP(step) {
+      const state = (step && step.state) || {};
+      const table = safeArray(state.table);
+      const currentCell = safeArray(state.current_cell);
+      const currentI = Number(currentCell[0]);
+      const currentJ = Number(currentCell[1]);
+
+      if (!table.length) {
+        vizContainer.innerHTML = '<p class="muted">No DP table data available.</p>';
+        return;
+      }
+
+      const rows = table.map((row, i) => {
+        const cells = safeArray(row).map((cell, j) => {
+          const activeClass = i === currentI && j === currentJ ? "active" : "";
+          return `<td class="${activeClass}">${Number(cell) || 0}</td>`;
+        }).join("");
+        return `<tr>${cells}</tr>`;
+      }).join("");
+
+      vizContainer.innerHTML = `<table><tbody>${rows}</tbody></table>`;
+    }
+
+    function renderVisualization() {
+      const step = getCurrentStep();
+      if (!currentResponse) {
+        vizContainer.innerHTML = "";
+        return;
+      }
+
+      if (currentResponse.problem_type === "graph") {
+        renderGraph(step);
+        return;
+      }
+      if (currentResponse.problem_type === "tree") {
+        renderTree(step);
+        return;
+      }
+      if (currentResponse.problem_type === "dp") {
+        renderDP(step);
+        return;
+      }
+      renderArray(step);
+    }
+
+    function renderAll() {
+      outputPanel.classList.remove("hidden");
+      explanationText.textContent = currentResponse ? (currentResponse.explanation || "") : "";
+      renderStep();
+      renderVisualization();
+    }
+
+    async function solveProblem() {
+      const problem = problemInput.value.trim();
+      if (!problem) {
+        setStatus("Please enter a problem statement.", "error");
+        return;
+      }
+
+      submitBtn.disabled = true;
+      stopPlayback();
+      setStatus("Solving...", "");
+
+      try {
+        const response = await fetch("/solve", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ problem }),
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error((data && data.details) || "Request failed");
+        }
+
+        currentResponse = data;
+        currentStepIndex = 0;
+        renderAll();
+        setStatus("Solved successfully.", "ok");
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unknown error";
+        setStatus(`Error: ${message}`, "error");
+      } finally {
+        submitBtn.disabled = false;
+      }
+    }
+
+    async function loadSampleEvaluation() {
+      sampleBtn.disabled = true;
+      stopPlayback();
+      setStatus("Loading sample evaluation...", "");
+
+      try {
+        const response = await fetch("/evaluate/sample");
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error("Failed to fetch sample evaluation.");
+        }
+
+        const firstValid = Object.values(data.samples || {}).find((entry) => entry && entry.valid && entry.result);
+        if (!firstValid) {
+          throw new Error("No valid sample result returned.");
+        }
+
+        currentResponse = firstValid.result;
+        currentStepIndex = 0;
+        problemInput.value = firstValid.problem || problemInput.value;
+        renderAll();
+        setStatus("Loaded sample evaluation result.", "ok");
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unknown error";
+        setStatus(`Error: ${message}`, "error");
+      } finally {
+        sampleBtn.disabled = false;
+      }
+    }
+
+    prevBtn.addEventListener("click", () => {
+      if (!currentResponse) {
+        return;
+      }
+      stopPlayback();
+      currentStepIndex = Math.max(0, currentStepIndex - 1);
+      renderAll();
+    });
+
+    nextBtn.addEventListener("click", () => {
+      if (!currentResponse || !Array.isArray(currentResponse.steps)) {
+        return;
+      }
+      stopPlayback();
+      currentStepIndex = Math.min(currentResponse.steps.length - 1, currentStepIndex + 1);
+      renderAll();
+    });
+
+    playBtn.addEventListener("click", startPlayback);
+    pauseBtn.addEventListener("click", stopPlayback);
+
+    speedSelect.addEventListener("change", () => {
+      if (playbackTimer) {
+        startPlayback();
+      }
+    });
+
+    submitBtn.addEventListener("click", solveProblem);
+    sampleBtn.addEventListener("click", loadSampleEvaluation);
+
+    problemInput.addEventListener("keydown", (event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+        solveProblem();
+      }
+    });
+
+    updatePlaybackControls();
+  </script>
+</body>
+</html>
