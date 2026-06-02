@@ -41,6 +41,147 @@ app/
     └── index.html           # Interactive visualization UI
 ```
 
+## Workflow: Request to Response
+
+This section describes the full data flow when a user submits a problem.
+
+### 1. Request Entry — `POST /solve`
+
+The client sends a JSON payload:
+
+```json
+{"problem": "Explain Bubble Sort for [5,3,1,4]"}
+```
+
+`app/routes/solve.py` receives this via the `SolveRequest` Pydantic model, resets per-request LLM metadata, and calls the router.
+
+### 2. Problem Type Detection — `core/router.py`
+
+`detect_problem_type()` scores the input against keyword banks:
+
+| Type | Keywords |
+|------|----------|
+| array | sort, bubble, selection, insertion, merge, quick, two pointer, sliding window, subarray, binary search |
+| graph | bfs, dfs, dijkstra, shortest path, graph, adjacency, vertex, edge, topological, kruskal, prim |
+| tree | tree, binary tree, bst, inorder, preorder, postorder, level order, avl, heap, trie |
+| dp | dynamic programming, dp, memoization, tabulation, knapsack, lcs, edit distance, coin change, fibonacci |
+
+The type with the highest keyword match score wins. If no keywords match, it defaults to `array`.
+
+### 3. Engine Routing
+
+`route_problem_with_meta()` decides which engine handles the problem:
+
+**Deterministic path (no LLM call):**
+- Array sorting problems (bubble, selection, insertion) → `deterministic_engine.py`
+- Graph BFS traversal → `engines/graph_engine.py`
+
+**LLM path:**
+- Everything else → `services/llm_service.py` with type-specific prompts and Pydantic validators
+
+### 4. Deterministic Engine — `services/deterministic_engine.py`
+
+For sorting problems:
+1. `extract_array()` pulls integers from the prompt (bracket notation or raw numbers)
+2. `detect_algorithm()` identifies bubble, selection, or insertion from keywords
+3. The matching simulator runs the algorithm step-by-step, recording:
+   - Each comparison or swap
+   - Highlighted indices
+   - Sorted boundary progress
+4. Returns a fully-formed `ArrayResponse`-compatible dict
+
+For graph BFS:
+1. `engines/graph_engine.py` parses nodes and edges from natural language
+2. `run_bfs()` executes the algorithm, recording queue state, visited nodes, and active node at each step
+3. Returns a `GraphResponse`-compatible dict
+
+### 5. LLM Service — `services/llm_service.py`
+
+For non-deterministic problems, the LLM pipeline runs:
+
+```
+Build prompt from template (app/prompts/*.txt)
+    ↓
+Call Groq API with response_format: json_object
+    ↓
+Extract JSON from response (handles markdown fences)
+    ↓
+Validate against Pydantic model (ArrayResponse / GraphResponse / TreeResponse / DPResponse)
+    ↓
+Run semantic validation (e.g., final array is sorted, no duplicate steps)
+    ↓
+If invalid → repair prompt with error details → retry (up to max_retries)
+    ↓
+If all retries fail → fallback to deterministic engine (arrays only)
+```
+
+Metadata about each call (engine used, raw LLM output) is stored in context variables for observability.
+
+### 6. Response Normalization — `core/normalizer.py`
+
+Before returning to the client, `normalize_response()` sanitizes the payload:
+
+- Ensures `problem_type` is one of the supported types
+- Sorts steps by step number
+- Normalizes state structures per type:
+  - **array**: validates indices, clamps sorted_boundary
+  - **graph**: ensures active node exists in nodes list
+  - **tree**: ensures current node exists in nodes list
+  - **dp**: clamps current_cell to table bounds
+- Builds a consistent `visualization` section from step data
+- Guarantees at least one step exists (adds a default init step if empty)
+
+### 7. Debug Capture — `core/debug_store.py`
+
+Every solve attempt is logged to an in-memory ring buffer (max 10 entries):
+
+- Problem text
+- Detected type and engine used
+- Raw LLM output (if applicable)
+- Parsed/normalized output
+- Valid flag and error message (if failed)
+
+Accessible via `/debug/last`, `/debug/history`, `/debug/errors`.
+
+### 8. Response Delivery
+
+The final `SolveResponse` is returned:
+
+```json
+{
+  "problem_type": "array",
+  "explanation": "Bubble Sort repeatedly compares adjacent elements...",
+  "steps": [
+    {
+      "step": 1,
+      "description": "Compare indices 0 and 1.",
+      "state": {
+        "array": [5, 3, 1, 4],
+        "highlight": [0, 1],
+        "sorted_boundary": -1
+      }
+    }
+  ],
+  "visualization": {
+    "type": "array",
+    "data": {"initial_array": [5, 3, 1, 4]}
+  }
+}
+```
+
+On failure, a 502 or 500 error is returned with an `ErrorResponse` containing the error code and details.
+
+### 9. Frontend Visualization — `static/index.html`
+
+The UI renders the response based on `problem_type`:
+
+- **array**: Animated bar chart with highlighted indices and sorted boundary
+- **graph**: SVG node-link diagram with visited/active state coloring
+- **tree**: SVG tree layout with current node highlighting
+- **dp**: Table grid with active cell highlighting
+
+Playback controls allow stepping through manually or auto-playing at configurable speed.
+
 ## Quick Start
 
 1. Install dependencies:
