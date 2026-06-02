@@ -247,3 +247,15 @@ Playback controls allow stepping through manually or auto-playing at configurabl
 5. **Repair** — On validation failure, the LLM is re-prompted with the error and invalid output
 6. **Normalize** — Responses are sanitized into a consistent frontend-ready shape
 7. **Visualize** — The UI renders bars (arrays), SVG graphs, trees, or DP tables from the step states
+
+## Use Case: College Placement Preparation
+
+This reasoning engine is designed to help students prepare for technical interviews and coding rounds during campus placements:
+
+- **Step-by-step explanations** break down complex algorithms into digestible chunks, making it easier to learn sorting, graph traversal, tree operations, and dynamic programming from scratch
+- **Visual feedback** reinforces understanding — students can see exactly how an array changes during Bubble Sort or how BFS explores a graph layer by layer
+- **Deterministic sorting engine** provides instant, guaranteed-correct results for common placement topics (Bubble, Selection, Insertion sort), allowing rapid revision without waiting for LLM latency
+- **LLM-powered solver** covers advanced topics (Dijkstra, BST operations, knapsack DP) that frequently appear in online assessment platforms like HackerRank, LeetCode, and CodeSignal
+- **Interview simulation** — students can input problem descriptions in natural language (as they might hear them in an interview) and receive structured, interviewer-style walkthroughs with state snapshots they can explain aloud
+- **Self-paced practice** — the interactive UI lets students pause, step forward, and replay algorithm execution, building the confidence to whiteboard solutions in real interviews
+- **Error recovery and repair loops** mirror the iterative debugging process expected in coding rounds, teaching students to spot and fix logical mistakes in their approach
