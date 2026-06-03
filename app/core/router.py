@@ -104,6 +104,37 @@ _ARRAY_KEYWORDS: tuple[str, ...] = (
     "linear search",
 )
 
+_LINKED_LIST_KEYWORDS: tuple[str, ...] = (
+    "linked list",
+    "linkedlist",
+    "singly linked",
+    "doubly linked",
+    "list node",
+    "next pointer",
+    "reverse linked",
+    "merge linked",
+    "cycle detection",
+    "detect cycle",
+    "has cycle",
+    "linked list traversal",
+)
+
+_HASHMAP_KEYWORDS: tuple[str, ...] = (
+    "hashmap",
+    "hash map",
+    "hash table",
+    "hashtable",
+    "dictionary",
+    "dict",
+    "key value",
+    "key-value",
+    "collision",
+    "hash function",
+    "separate chaining",
+    "linear probing",
+    "quadratic probing",
+)
+
 
 def _score(problem_lower: str, keywords: tuple[str, ...]) -> int:
     """Count how many keywords from a bank appear in the problem text."""
@@ -113,7 +144,7 @@ def _score(problem_lower: str, keywords: tuple[str, ...]) -> int:
 def detect_problem_type(problem: str) -> str:
     """Classify a problem description into one of the supported types.
 
-    Returns one of: ``"array"``, ``"graph"``, ``"tree"``, ``"dp"``, ``"unknown"``.
+    Returns one of: ``"array"``, ``"graph"``, ``"tree"``, ``"dp"``, ``"linked_list"``, ``"hashmap"``, ``"unknown"``.
     """
     lowered = problem.lower()
 
@@ -122,10 +153,15 @@ def detect_problem_type(problem: str) -> str:
         "tree": _score(lowered, _TREE_KEYWORDS),
         "dp": _score(lowered, _DP_KEYWORDS),
         "array": _score(lowered, _ARRAY_KEYWORDS),
+        "linked_list": _score(lowered, _LINKED_LIST_KEYWORDS),
+        "hashmap": _score(lowered, _HASHMAP_KEYWORDS),
     }
 
-    best_type = max(scores, key=lambda k: scores[k])
-    best_score = scores[best_type]
+    # Tie-break: prefer linked_list and hashmap over array when scores are equal
+    best_score = max(scores.values())
+    candidates = [k for k, v in scores.items() if v == best_score]
+    priority_order = ["linked_list", "hashmap", "graph", "tree", "dp", "array"]
+    best_type = next((t for t in priority_order if t in candidates), candidates[0])
 
     if best_score == 0:
         logger.info("Problem type detection: no keywords matched → unknown")
@@ -169,6 +205,8 @@ async def route_problem(problem: str) -> dict[str, Any]:
     * ``graph`` → graph LLM
     * ``tree``  → tree LLM
     * ``dp``    → dp LLM
+    * ``linked_list`` → deterministic linked_list engine
+    * ``hashmap`` → deterministic hashmap engine
     * ``unknown`` → defaults to array LLM
     """
     # Import here to avoid circular imports
@@ -199,6 +237,12 @@ async def route_problem(problem: str) -> dict[str, Any]:
         result = await call_llm_tree(problem)
     elif problem_type == "dp":
         result = await call_llm_dp(problem)
+    elif problem_type == "linked_list":
+        from app.engines.linked_list_engine import build_linked_list_solution
+        result = build_linked_list_solution(problem)
+    elif problem_type == "hashmap":
+        from app.engines.hashmap_engine import build_hashmap_solution
+        result = build_hashmap_solution(problem)
     else:
         # "array" or "unknown" → use existing array pipeline
         result = await call_llm_array(problem)
@@ -256,6 +300,16 @@ async def route_problem_with_meta(problem: str) -> dict[str, Any]:
         service_meta = get_last_call_metadata()
         engine_used = service_meta.get("engine_used", "llm")
         raw_llm_output = service_meta.get("raw_llm_output", "")
+    elif problem_type == "linked_list":
+        from app.engines.linked_list_engine import build_linked_list_solution
+        parsed_output = build_linked_list_solution(problem)
+        engine_used = "deterministic"
+        raw_llm_output = ""
+    elif problem_type == "hashmap":
+        from app.engines.hashmap_engine import build_hashmap_solution
+        parsed_output = build_hashmap_solution(problem)
+        engine_used = "deterministic"
+        raw_llm_output = ""
     else:
         parsed_output = await call_llm_array(problem)
         service_meta = get_last_call_metadata()

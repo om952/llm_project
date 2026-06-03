@@ -5,7 +5,7 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
-_SUPPORTED_TYPES = {"array", "graph", "tree", "dp"}
+_SUPPORTED_TYPES = {"array", "graph", "tree", "dp", "linked_list", "hashmap"}
 
 
 def _safe_int(value: Any, default: int = 0) -> int:
@@ -128,6 +128,73 @@ def _normalize_dp_state(state: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _normalize_linked_list_state(state: dict[str, Any]) -> dict[str, Any]:
+    """Normalize linked list step state with required keys and defaults."""
+    nodes = state.get("nodes") if isinstance(state.get("nodes"), list) else []
+    parsed_nodes: list[dict[str, Any]] = []
+    for node in nodes:
+        if isinstance(node, dict):
+            parsed_nodes.append({
+                "value": _safe_int(node.get("value"), 0),
+                "index": _safe_int(node.get("index"), 0),
+                "next": _safe_int(node.get("next"), -1) if node.get("next") is not None else None,
+            })
+    if not parsed_nodes:
+        parsed_nodes = [{"value": 0, "index": 0, "next": None}]
+
+    highlight = state.get("highlight") if isinstance(state.get("highlight"), list) else []
+    parsed_highlight = [_safe_int(index, -1) for index in highlight]
+
+    pointers = state.get("pointers") if isinstance(state.get("pointers"), dict) else {}
+    parsed_pointers: dict[str, Any] = {}
+    for key, value in pointers.items():
+        if value is None:
+            parsed_pointers[key] = None
+        else:
+            parsed_pointers[key] = _safe_int(value, -1)
+
+    return {
+        "nodes": parsed_nodes,
+        "highlight": parsed_highlight,
+        "pointers": parsed_pointers,
+    }
+
+
+def _normalize_hashmap_state(state: dict[str, Any]) -> dict[str, Any]:
+    """Normalize hashmap step state with required keys and defaults."""
+    buckets_raw = state.get("buckets") if isinstance(state.get("buckets"), list) else []
+    buckets: list[list[dict[str, Any]]] = []
+    for bucket in buckets_raw:
+        if isinstance(bucket, list):
+            parsed_bucket: list[dict[str, Any]] = []
+            for item in bucket:
+                if isinstance(item, dict):
+                    parsed_bucket.append({
+                        "key": str(item.get("key", "")),
+                        "value": _safe_int(item.get("value"), 0),
+                    })
+            buckets.append(parsed_bucket)
+    if not buckets:
+        buckets = [[]]
+
+    highlight_bucket = state.get("highlight_bucket")
+    if highlight_bucket is not None:
+        highlight_bucket = _safe_int(highlight_bucket, -1)
+
+    highlight_key = state.get("highlight_key")
+    if highlight_key is not None:
+        highlight_key = str(highlight_key)
+
+    operation = str(state.get("operation", "init"))
+
+    return {
+        "buckets": buckets,
+        "highlight_bucket": highlight_bucket,
+        "highlight_key": highlight_key,
+        "operation": operation,
+    }
+
+
 def _normalize_state(problem_type: str, state: dict[str, Any]) -> dict[str, Any]:
     """Normalize state structure based on problem type."""
     if problem_type == "graph":
@@ -136,6 +203,10 @@ def _normalize_state(problem_type: str, state: dict[str, Any]) -> dict[str, Any]
         return _normalize_tree_state(state)
     if problem_type == "dp":
         return _normalize_dp_state(state)
+    if problem_type == "linked_list":
+        return _normalize_linked_list_state(state)
+    if problem_type == "hashmap":
+        return _normalize_hashmap_state(state)
     return _normalize_array_state(state)
 
 
@@ -190,10 +261,32 @@ def _normalize_visualization(
             },
         }
 
+    if problem_type == "linked_list":
+        source = steps[-1]["state"] if steps else _default_state("linked_list")
+        viz_data = data if data else {}
+        return {
+            "type": "linked_list",
+            "data": {
+                "initial_values": viz_data.get("initial_values") if isinstance(viz_data.get("initial_values"), list) else [node.get("value", 0) for node in source.get("nodes", [])],
+                "nodes": viz_data.get("nodes") if isinstance(viz_data.get("nodes"), list) else source.get("nodes", []),
+            },
+        }
+
+    if problem_type == "hashmap":
+        source = steps[-1]["state"] if steps else _default_state("hashmap")
+        viz_data = data if data else {}
+        return {
+            "type": "hashmap",
+            "data": {
+                "buckets": viz_data.get("buckets") if isinstance(viz_data.get("buckets"), list) else source.get("buckets", [[]]),
+                "capacity": viz_data.get("capacity") if isinstance(viz_data.get("capacity"), int) else 8,
+            },
+        }
+
     initial_array = data.get("initial_array") if isinstance(data.get("initial_array"), list) else None
     if initial_array is None:
         if steps:
-            initial_array = steps[0]["state"]["array"]
+            initial_array = steps[0]["state"].get("array", [0])
         else:
             initial_array = [0]
 

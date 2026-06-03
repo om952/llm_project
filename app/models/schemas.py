@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal, Union
+from typing import Any, Literal, Union
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -26,7 +26,7 @@ class SolveRequest(StrictBaseModel):
 class BaseResponse(StrictBaseModel):
     """Common response fields shared across all problem types."""
 
-    problem_type: Literal["array", "graph", "tree", "dp"]
+    problem_type: Literal["array", "graph", "tree", "dp", "linked_list", "hashmap"]
     explanation: str = Field(..., min_length=1)
 
 
@@ -337,10 +337,131 @@ class DPResponse(BaseResponse):
 
 
 # ---------------------------------------------------------------------------
+# LINKED LIST schemas
+# ---------------------------------------------------------------------------
+
+class LinkedListStepState(StrictBaseModel):
+    """Step state for linked list algorithm visualization."""
+
+    nodes: list[dict[str, Any]] = Field(..., min_length=1)
+    highlight: list[int] = Field(default_factory=list)
+    pointers: dict[str, Any] = Field(default_factory=dict)
+
+
+class LinkedListStep(StrictBaseModel):
+    """One reasoning step and state snapshot for linked list algorithms."""
+
+    step: int = Field(..., ge=1)
+    description: str = Field(..., min_length=1)
+    state: LinkedListStepState
+
+
+class LinkedListVisualizationData(StrictBaseModel):
+    """Visualization payload for the linked list renderer."""
+
+    initial_values: list[int] = Field(..., min_length=1)
+    nodes: list[dict[str, Any]] = Field(..., min_length=1)
+
+
+class LinkedListVisualization(StrictBaseModel):
+    """Visualization metadata and data payload for linked lists."""
+
+    type: Literal["linked_list"]
+    data: LinkedListVisualizationData
+
+
+class LinkedListResponse(BaseResponse):
+    """Strictly validated output schema for linked list problems."""
+
+    problem_type: Literal["linked_list"]
+    steps: list[LinkedListStep] = Field(..., min_length=1)
+    visualization: LinkedListVisualization
+
+    @model_validator(mode="after")
+    def validate_steps(self) -> "LinkedListResponse":
+        """Enforce sequential steps and non-duplicate transitions."""
+        for expected_step, step_obj in enumerate(self.steps, start=1):
+            if step_obj.step != expected_step:
+                raise ValueError("Step numbering must start at 1 and be sequential.")
+
+        for idx in range(1, len(self.steps)):
+            previous = self.steps[idx - 1].state.model_dump()
+            current = self.steps[idx].state.model_dump()
+            if previous == current:
+                raise ValueError("Each step must modify the previous state.")
+
+        if self.problem_type != self.visualization.type:
+            raise ValueError("problem_type must match visualization.type")
+
+        return self
+
+
+# ---------------------------------------------------------------------------
+# HASHMAP schemas
+# ---------------------------------------------------------------------------
+
+class HashmapStepState(StrictBaseModel):
+    """Step state for hashmap algorithm visualization."""
+
+    buckets: list[list[dict[str, Any]]] = Field(..., min_length=1)
+    highlight_bucket: int | None = Field(default=None)
+    highlight_key: str | None = Field(default=None)
+    operation: str = Field(default="init")
+
+
+class HashmapStep(StrictBaseModel):
+    """One reasoning step and state snapshot for hashmap algorithms."""
+
+    step: int = Field(..., ge=1)
+    description: str = Field(..., min_length=1)
+    state: HashmapStepState
+
+
+class HashmapVisualizationData(StrictBaseModel):
+    """Visualization payload for the hashmap renderer."""
+
+    buckets: list[list[dict[str, Any]]] = Field(..., min_length=1)
+    capacity: int = Field(..., ge=1)
+
+
+class HashmapVisualization(StrictBaseModel):
+    """Visualization metadata and data payload for hashmaps."""
+
+    type: Literal["hashmap"]
+    data: HashmapVisualizationData
+
+
+class HashmapResponse(BaseResponse):
+    """Strictly validated output schema for hashmap problems."""
+
+    problem_type: Literal["hashmap"]
+    steps: list[HashmapStep] = Field(..., min_length=1)
+    visualization: HashmapVisualization
+
+    @model_validator(mode="after")
+    def validate_steps(self) -> "HashmapResponse":
+        """Enforce sequential steps and non-duplicate transitions."""
+        for expected_step, step_obj in enumerate(self.steps, start=1):
+            if step_obj.step != expected_step:
+                raise ValueError("Step numbering must start at 1 and be sequential.")
+
+        for idx in range(1, len(self.steps)):
+            previous = self.steps[idx - 1].state.model_dump()
+            current = self.steps[idx].state.model_dump()
+            if previous == current:
+                raise ValueError("Each step must modify the previous state.")
+
+        if self.problem_type != self.visualization.type:
+            raise ValueError("problem_type must match visualization.type")
+
+        return self
+
+
+# ---------------------------------------------------------------------------
 # Union response type
 # ---------------------------------------------------------------------------
 
-ResponseModel = Union[ArrayResponse, GraphResponse, TreeResponse, DPResponse]
+ResponseModel = Union[ArrayResponse, GraphResponse, TreeResponse, DPResponse, LinkedListResponse, HashmapResponse]
 
 
 # ---------------------------------------------------------------------------
@@ -353,8 +474,8 @@ class SolveResponse(BaseResponse):
     Accepts any supported problem type.
     """
 
-    steps: list[ArrayStep | GraphStep | TreeStep | DPStep] = Field(..., min_length=1)
-    visualization: ArrayVisualization | GraphVisualization | TreeVisualization | DPVisualization
+    steps: list[ArrayStep | GraphStep | TreeStep | DPStep | LinkedListStep | HashmapStep] = Field(..., min_length=1)
+    visualization: ArrayVisualization | GraphVisualization | TreeVisualization | DPVisualization | LinkedListVisualization | HashmapVisualization
 
     @model_validator(mode="after")
     def validate_type_consistency(self) -> "SolveResponse":

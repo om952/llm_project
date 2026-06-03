@@ -5,9 +5,9 @@ A FastAPI backend that solves Data Structures and Algorithms (DSA) problems usin
 ## What It Does
 
 - Accepts a natural-language DSA prompt (e.g. "Explain Bubble Sort for [5,3,1]")
-- Detects the problem type: **array**, **graph**, **tree**, or **dynamic programming**
+- Detects the problem type: **array**, **graph**, **tree**, **dynamic programming**, **linked list**, or **hashmap**
 - Routes to the appropriate solver:
-  - **Deterministic engine** for sorting (bubble, selection, insertion) and BFS graph traversal — guaranteed correct, no LLM call
+  - **Deterministic engine** for sorting (bubble, selection, insertion), BFS graph traversal, linked list operations, and hashmap operations — guaranteed correct, no LLM call
   - **LLM engine** (Groq) for everything else — with retries, repair prompts, and strict JSON schema validation
 - Returns a structured response with:
   - `explanation` — human-readable algorithm description
@@ -29,7 +29,9 @@ app/
 │   ├── llm_service.py       # Groq client, retries, JSON extraction, validation
 │   └── deterministic_engine.py  # Bubble/Selection/Insertion sort simulators
 ├── engines/
-│   └── graph_engine.py      # Deterministic BFS parser + executor
+│   ├── graph_engine.py      # Deterministic BFS parser + executor
+│   ├── linked_list_engine.py # Deterministic linked list operations (traversal, reverse, merge, insert, delete, cycle detection)
+│   └── hashmap_engine.py    # Deterministic hashmap operations (insert, delete, search, collision handling)
 ├── core/
 │   ├── router.py            # Problem type detection + engine routing
 │   ├── normalizer.py        # Response normalization for frontend
@@ -65,6 +67,8 @@ The client sends a JSON payload:
 | graph | bfs, dfs, dijkstra, shortest path, graph, adjacency, vertex, edge, topological, kruskal, prim |
 | tree | tree, binary tree, bst, inorder, preorder, postorder, level order, avl, heap, trie |
 | dp | dynamic programming, dp, memoization, tabulation, knapsack, lcs, edit distance, coin change, fibonacci |
+| linked_list | linked list, linkedlist, singly linked, doubly linked, list node, next pointer, reverse linked, merge linked, cycle detection |
+| hashmap | hashmap, hash map, hash table, hashtable, dictionary, dict, key value, key-value, collision, hash function, separate chaining, linear probing |
 
 The type with the highest keyword match score wins. If no keywords match, it defaults to `array`.
 
@@ -75,6 +79,8 @@ The type with the highest keyword match score wins. If no keywords match, it def
 **Deterministic path (no LLM call):**
 - Array sorting problems (bubble, selection, insertion) → `deterministic_engine.py`
 - Graph BFS traversal → `engines/graph_engine.py`
+- Linked list operations (traversal, reverse, merge, insert, delete, cycle detection) → `engines/linked_list_engine.py`
+- Hashmap operations (insert, delete, search, collision handling) → `engines/hashmap_engine.py`
 
 **LLM path:**
 - Everything else → `services/llm_service.py` with type-specific prompts and Pydantic validators
@@ -94,6 +100,18 @@ For graph BFS:
 1. `engines/graph_engine.py` parses nodes and edges from natural language
 2. `run_bfs()` executes the algorithm, recording queue state, visited nodes, and active node at each step
 3. Returns a `GraphResponse`-compatible dict
+
+For linked list operations:
+1. `engines/linked_list_engine.py` extracts values from bracket notation or raw numbers
+2. `detect_linked_list_algorithm()` identifies the operation (traversal, reverse, merge, insert, delete, cycle detection)
+3. The matching simulator runs the algorithm step-by-step, recording node states, pointer positions, and highlighted indices
+4. Returns a `LinkedListResponse`-compatible dict
+
+For hashmap operations:
+1. `engines/hashmap_engine.py` parses key-value pairs from the problem text
+2. `detect_hashmap_algorithm()` identifies the operation (insert, delete, search, collision)
+3. The matching simulator computes hash indices, builds bucket representations, and runs the operation step-by-step
+4. Returns a `HashmapResponse`-compatible dict
 
 ### 5. LLM Service — `services/llm_service.py`
 
@@ -179,6 +197,8 @@ The UI renders the response based on `problem_type`:
 - **graph**: SVG node-link diagram with visited/active state coloring
 - **tree**: SVG tree layout with current node highlighting
 - **dp**: Table grid with active cell highlighting
+- **linked_list**: Node chain visualization with pointer tracking and highlighted nodes
+- **hashmap**: Bucket array visualization with hash index highlighting and collision chains
 
 Playback controls allow stepping through manually or auto-playing at configurable speed.
 
@@ -204,6 +224,20 @@ Playback controls allow stepping through manually or auto-playing at configurabl
    curl -X POST http://localhost:8000/solve \
      -H "Content-Type: application/json" \
      -d '{"problem": "Explain Bubble Sort for [5,3,1,4]"}'
+   ```
+
+   Linked list example:
+   ```bash
+   curl -X POST http://localhost:8000/solve \
+     -H "Content-Type: application/json" \
+     -d '{"problem": "Reverse linked list [1,2,3,4,5]"}'
+   ```
+
+   Hashmap example:
+   ```bash
+   curl -X POST http://localhost:8000/solve \
+     -H "Content-Type: application/json" \
+     -d '{"problem": "Search for key \"apple\" in hashmap with (apple, 10), (banana, 20)"}'
    ```
 
 ## Environment Variables
@@ -237,11 +271,13 @@ Playback controls allow stepping through manually or auto-playing at configurabl
 | Graph | BFS traversal | DFS, Dijkstra, etc. | "Run BFS on graph A-B, A-C" |
 | Tree | — | Inorder, preorder, BST | "Inorder traversal of binary tree [4,2,6,1,3,5,7]" |
 | DP | — | Knapsack, LCS, etc. | "0/1 knapsack weights [1,3,4], values [15,20,30]" |
+| Linked List | Traversal, Reverse, Merge, Insert, Delete, Cycle Detection | — | "Reverse linked list [1,2,3,4,5]" |
+| Hashmap | Insert, Delete, Search, Collision Handling | — | "Insert key 'apple' with value 10 into hashmap" |
 
 ## How Solving Works
 
-1. **Detect** — Keyword scoring classifies the problem into array/graph/tree/dp
-2. **Route** — Array sorting and graph BFS use the deterministic engine; everything else uses the LLM
+1. **Detect** — Keyword scoring classifies the problem into array/graph/tree/dp/linked_list/hashmap
+2. **Route** — Array sorting, graph BFS, linked list, and hashmap use the deterministic engine; everything else uses the LLM
 3. **Generate** — LLM calls use strict JSON-schema prompts with `response_format: json_object`
 4. **Validate** — Pydantic models enforce field presence, step sequencing, state transitions
 5. **Repair** — On validation failure, the LLM is re-prompted with the error and invalid output
@@ -255,6 +291,7 @@ This reasoning engine is designed to help students prepare for technical intervi
 - **Step-by-step explanations** break down complex algorithms into digestible chunks, making it easier to learn sorting, graph traversal, tree operations, and dynamic programming from scratch
 - **Visual feedback** reinforces understanding — students can see exactly how an array changes during Bubble Sort or how BFS explores a graph layer by layer
 - **Deterministic sorting engine** provides instant, guaranteed-correct results for common placement topics (Bubble, Selection, Insertion sort), allowing rapid revision without waiting for LLM latency
+- **Deterministic linked list and hashmap engines** provide step-by-step visualizations for fundamental data structure operations (traversal, reverse, insert, delete, search, collision handling) — core topics in technical interviews
 - **LLM-powered solver** covers advanced topics (Dijkstra, BST operations, knapsack DP) that frequently appear in online assessment platforms like HackerRank, LeetCode, and CodeSignal
 - **Interview simulation** — students can input problem descriptions in natural language (as they might hear them in an interview) and receive structured, interviewer-style walkthroughs with state snapshots they can explain aloud
 - **Self-paced practice** — the interactive UI lets students pause, step forward, and replay algorithm execution, building the confidence to whiteboard solutions in real interviews

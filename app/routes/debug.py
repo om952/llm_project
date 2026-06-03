@@ -45,6 +45,8 @@ async def evaluate_sample() -> dict[str, Any]:
         "graph": "Run BFS on graph with nodes A,B,C,D and edges A-B, A-C, B-D.",
         "tree": "Explain inorder traversal for binary tree with nodes [4,2,6,1,3,5,7].",
         "dp": "Solve 0/1 knapsack with weights [1,3,4], values [15,20,30], capacity 4 using DP.",
+        "linked_list": "Reverse linked list [1,2,3,4,5]",
+        "hashmap": "Search for key 'apple' in hashmap with (apple, 10), (banana, 20)",
     }
 
     results: dict[str, Any] = {}

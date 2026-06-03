@@ -305,6 +305,141 @@
     .hidden {
       display: none;
     }
+
+    /* Linked list styles */
+    .ll-wrap {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex-wrap: wrap;
+      padding: 12px;
+      border: 1px dashed var(--border);
+      border-radius: 10px;
+      background: #fbfdff;
+      min-height: 100px;
+    }
+
+    .ll-node {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+    }
+
+    .ll-box {
+      width: 52px;
+      height: 52px;
+      border-radius: 8px;
+      border: 2px solid #4a6eb5;
+      background: #e6efff;
+      color: #163263;
+      font-weight: 700;
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+    }
+
+    .ll-box.highlight {
+      background: var(--active);
+      border-color: #d6a500;
+      color: #4a3200;
+    }
+
+    .ll-box .ll-index {
+      font-size: 0.65rem;
+      font-weight: 500;
+      color: var(--muted);
+    }
+
+    .ll-arrow {
+      font-size: 1.2rem;
+      color: var(--muted);
+      padding: 0 4px;
+    }
+
+    .ll-null {
+      font-size: 0.85rem;
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    .ll-pointers {
+      margin-top: 10px;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    /* Hashmap styles */
+    .hm-wrap {
+      display: grid;
+      gap: 8px;
+      padding: 12px;
+      border: 1px dashed var(--border);
+      border-radius: 10px;
+      background: #fbfdff;
+    }
+
+    .hm-bucket {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #fff;
+    }
+
+    .hm-bucket.highlight {
+      background: #fff2c7;
+      border-color: #e4b000;
+    }
+
+    .hm-bucket-index {
+      min-width: 28px;
+      text-align: center;
+      font-weight: 700;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    .hm-bucket-index.highlight {
+      color: #b38600;
+    }
+
+    .hm-items {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .hm-item {
+      padding: 4px 10px;
+      border-radius: 6px;
+      border: 1px solid #4a6eb5;
+      background: #e6efff;
+      color: #163263;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+
+    .hm-item.highlight {
+      background: var(--active);
+      border-color: #d6a500;
+      color: #4a3200;
+    }
+
+    .hm-empty {
+      font-size: 0.8rem;
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    .hm-arrow {
+      font-size: 0.9rem;
+      color: var(--muted);
+    }
   </style>
 </head>
 <body>
@@ -672,6 +807,86 @@
       vizContainer.innerHTML = `<table><tbody>${rows}</tbody></table>`;
     }
 
+    function renderLinkedList(step) {
+      const state = (step && step.state) || {};
+      const nodes = safeArray(state.nodes);
+      const highlight = new Set(safeArray(state.highlight));
+      const pointers = state.pointers || {};
+
+      if (!nodes.length) {
+        vizContainer.innerHTML = '<p class="muted">No linked list data available.</p>';
+        return;
+      }
+
+      const nodeMarkup = nodes.map((node, idx) => {
+        const value = Number(node.value) || 0;
+        const index = Number(node.index) || idx;
+        const next = node.next;
+        const isHighlight = highlight.has(index);
+        const boxClass = isHighlight ? "ll-box highlight" : "ll-box";
+        const arrow = next !== null && next !== undefined
+          ? '<span class="ll-arrow">→</span>'
+          : '<span class="ll-null">null</span>';
+        return `
+          <div class="ll-node">
+            <div class="${boxClass}">
+              <div>${value}</div>
+              <div class="ll-index">idx:${index}</div>
+            </div>
+            ${arrow}
+          </div>
+        `;
+      }).join("");
+
+      const pointerText = Object.entries(pointers)
+        .map(([key, value]) => `${key}: ${value !== null && value !== undefined ? value : 'null'}`)
+        .join(", ") || "none";
+
+      vizContainer.innerHTML = `
+        <div class="ll-wrap">${nodeMarkup}</div>
+        <div class="ll-pointers"><strong>Pointers:</strong> ${pointerText}</div>
+      `;
+    }
+
+    function renderHashmap(step) {
+      const state = (step && step.state) || {};
+      const buckets = safeArray(state.buckets);
+      const highlightBucket = state.highlight_bucket;
+      const highlightKey = state.highlight_key;
+
+      if (!buckets.length) {
+        vizContainer.innerHTML = '<p class="muted">No hashmap data available.</p>';
+        return;
+      }
+
+      const bucketMarkup = buckets.map((bucket, idx) => {
+        const isBucketHighlight = highlightBucket === idx;
+        const bucketClass = isBucketHighlight ? "hm-bucket highlight" : "hm-bucket";
+        const indexClass = isBucketHighlight ? "hm-bucket-index highlight" : "hm-bucket-index";
+
+        const items = safeArray(bucket);
+        const itemsMarkup = items.length
+          ? items.map((item, itemIdx) => {
+              const key = item.key || "";
+              const value = Number(item.value) || 0;
+              const isKeyHighlight = highlightKey === key;
+              const itemClass = isKeyHighlight ? "hm-item highlight" : "hm-item";
+              const arrow = itemIdx < items.length - 1 ? '<span class="hm-arrow">→</span>' : "";
+              return `<span class="${itemClass}">${key}: ${value}</span>${arrow}`;
+            }).join("")
+          : '<span class="hm-empty">empty</span>';
+
+        return `
+          <div class="${bucketClass}">
+            <div class="${indexClass}">${idx}</div>
+            <div class="hm-items">${itemsMarkup}</div>
+          </div>
+        `;
+      }).join("");
+
+      vizContainer.innerHTML = `<div class="hm-wrap">${bucketMarkup}</div>`;
+    }
+
     function renderVisualization() {
       const step = getCurrentStep();
       if (!currentResponse) {
@@ -689,6 +904,14 @@
       }
       if (currentResponse.problem_type === "dp") {
         renderDP(step);
+        return;
+      }
+      if (currentResponse.problem_type === "linked_list") {
+        renderLinkedList(step);
+        return;
+      }
+      if (currentResponse.problem_type === "hashmap") {
+        renderHashmap(step);
         return;
       }
       renderArray(step);
